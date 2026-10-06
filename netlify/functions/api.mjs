@@ -52,7 +52,7 @@ async function sendSms(phone, message) {
 const clean = (s, n = 300) => String(s ?? "").trim().slice(0, n);
 
 export default async (req) => {
-  const store = globalThis.__DEV_STORE || getStore("tickets");
+  const store = globalThis.__DEV_STORE || getStore({ name: "tickets", consistency: "strong" });
   const route = new URL(req.url).pathname.replace(/^\/api\//, "");
 
   if (route === "login" && req.method === "POST") {

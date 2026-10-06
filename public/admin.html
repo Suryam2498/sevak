@@ -101,7 +101,7 @@ function render(){
   $("count").textContent=f.length+" of "+rows.length+" issues";
   $("rows").querySelectorAll("button").forEach(b=>b.onclick=async()=>{
     const {t,i}=f[b.dataset.k];b.disabled=true;
-    try{await api("status",{method:"POST",body:JSON.stringify({id:t.id,index:i,status:$("s"+b.dataset.k).value,note:$("n"+b.dataset.k).value})});await load()}
+    try{const r=await api("status",{method:"POST",body:JSON.stringify({id:t.id,index:i,status:$("s"+b.dataset.k).value,note:$("n"+b.dataset.k).value})});Object.assign(t,r.ticket);render()}
     catch(e){alert(e.message);b.disabled=false}
   });
 }

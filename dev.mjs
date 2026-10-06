@@ -21,4 +21,4 @@ http.createServer(async (req, res) => {
   const f = path.join("public", url.pathname === "/" ? "index.html" : url.pathname);
   if (!f.startsWith("public") || !fs.existsSync(f)) { res.writeHead(404); return res.end("Not found"); }
   res.writeHead(200, { "content-type": types[path.extname(f)] || "application/octet-stream" }); res.end(fs.readFileSync(f));
-}).listen(8888, () => console.log("http://localhost:8888"));
+}).listen(process.env.PORT||8888, () => console.log("http://localhost:8888"));
