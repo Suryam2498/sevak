@@ -2,7 +2,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-process.env.ADMIN_PASSWORD ??= "datta29";
+process.env.ADMIN_PASSWORD ??= "datta@29";
 const dir = ".devdata"; fs.mkdirSync(dir, { recursive: true });
 globalThis.__DEV_STORE = {
   async setJSON(k, v) { fs.writeFileSync(path.join(dir, k + ".json"), JSON.stringify(v)); },
