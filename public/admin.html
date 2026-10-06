@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1d4ed8">
+<title>Admin Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <img src="janasena-Logo.png" alt="Jana Sena" class="logo" onerror="this.style.display='none'"><h1>Admin – Pithapuram Ward Issues</h1><small><a href="index.html">← Entry form</a></small></header>
+<main class="wide">
+<div id="login" class="card" style="max-width:380px;margin:40px auto">
+  <label for="pw">Admin password</label><input type="password" id="pw">
+  <button class="btn big" id="loginBtn">Login</button><div id="lmsg"></div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="top noprint" style="margin-bottom:12px">
+    <b id="updated"></b>
+    <span><button class="btn sec" id="refresh">Refresh</button> <button class="btn sec" id="csv">Download CSV</button> <button class="btn" onclick="window.print()">Print Report</button></span>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="grid2">
+    <div class="card"><h3 style="margin-top:0">By issue</h3><div id="byCat"></div></div>
+    <div class="card"><h3 style="margin-top:0">By ward</h3><div id="byWard"></div></div>
+  </div>
+  <div class="card">
+    <div class="filters">
+      <input type="search" id="q" placeholder="Search name / phone / ticket">
+      <select id="fWard"><option value="">All wards</option></select>
+      <select id="fStatus"><option value="">All status</option><option value="open">Open</option><option value="inprogress">In Progress</option><option value="completed">Completed</option><option value="rejected">Rejected</option></select>
+      <select id="fCat"><option value="">All issues</option></select>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Ticket</th><th>Date</th><th>Ward</th><th>Citizen</th><th>Issue</th><th>Status</th><th>Note</th><th class="noprint"></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <p id="count" style="color:var(--mut)"></p>
+  </div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const ST={open:"Open",inprogress:"In Progress",completed:"Completed",rejected:"Rejected"};
+const COL={open:"var(--open)",inprogress:"var(--inprogress)",completed:"var(--completed)",rejected:"var(--rejected)"};
+let token="",rows=[],cats=[];
+try{token=sessionStorage.getItem("tk")||""}catch{}
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function api(path,opt={}){
+  const r=await fetch("/api/"+path,{...opt,headers:{"content-type":"application/json",authorization:"Bearer "+token}});
+  const d=await r.json().catch(()=>({}));
+  if(r.status===401&&path!=="login"){token="";$("login").style.display="block";$("app").style.display="none"}
+  if(!r.ok)throw new Error(d.error||"Error");return d;
+}
+$("loginBtn").onclick=async()=>{
+  try{const r=await fetch("/api/login",{method:"POST",body:JSON.stringify({password:$("pw").value})});const d=await r.json();
+    if(!r.ok)throw new Error(d.error);token=d.token;try{sessionStorage.setItem("tk",token)}catch{}load()}
+  catch(e){$("lmsg").innerHTML=`<div class="msg err">${esc(e.message)}</div>`}
+};
+$("pw").addEventListener("keydown",e=>e.key==="Enter"&&$("loginBtn").click());
+
+async function load(){
+  try{
+    const d=await api("tickets");cats=d.categories;
+    rows=d.tickets.flatMap(t=>t.issues.map((it,i)=>({t,i,it})));
+    $("login").style.display="none";$("app").style.display="block";
+    const wards=[...new Set(d.tickets.map(t=>+t.ward))].sort((a,b)=>a-b);
+    $("fWard").innerHTML='<option value="">All wards</option>'+wards.map(w=>`<option>${w}</option>`).join("");
+    $("fCat").innerHTML='<option value="">All issues</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join("");
+    $("updated").textContent="Updated "+new Date().toLocaleTimeString();
+    render();
+  }catch(e){if(token)alert(e.message)}
+}
+const waLink=(t,it)=>"https://wa.me/91"+t.phone+"?text="+encodeURIComponent(`Pithapuram Municipality (Ward ${t.ward}): Complaint ${t.id} (${it.category}) status: ${ST[it.status].toUpperCase()}.${it.note?" Note: "+it.note:""}`);
+const filtered=()=>{
+  const q=$("q").value.toLowerCase(),w=$("fWard").value,s=$("fStatus").value,c=$("fCat").value;
+  return rows.filter(({t,it})=>(!w||t.ward==w)&&(!s||it.status==s)&&(!c||it.category==c)&&
+    (!q||(t.name+t.phone+t.id+t.address).toLowerCase().includes(q)));
+};
+function bars(el,map,total){
+  const ent=Object.entries(map).sort((a,b)=>b[1].n-a[1].n);
+  $(el).innerHTML=ent.map(([k,v])=>`<div class="bar"><span>${esc(k)}</span><div class="t">${Object.keys(ST).map(s=>v[s]?`<i style="width:${v[s]/ (ent[0][1].n)*100}%;background:${COL[s]}" title="${ST[s]}: ${v[s]}"></i>`:"").join("")}</div><b>${v.n}</b></div>`).join("")||"<p>No data</p>";
+}
+function render(){
+  const f=filtered(),cnt={open:0,inprogress:0,completed:0,rejected:0};
+  rows.forEach(r=>cnt[r.it.status]++);
+  $("stats").innerHTML=`<div class="stat"><b>${rows.length}</b><span>Total issues</span></div><div class="stat"><b>${new Set(rows.map(r=>r.t.id)).size}</b><span>Citizens</span></div>`+
+    Object.keys(ST).map(s=>`<div class="stat ${s}"><b>${cnt[s]}</b><span>${ST[s]}</span></div>`).join("");
+  const agg=(key)=>{const m={};rows.forEach(r=>{const k=key(r);(m[k]??={n:0})[r.it.status]=(m[k][r.it.status]||0)+1;m[k].n++});return m};
+  bars("byCat",agg(r=>r.it.category));bars("byWard",agg(r=>"Ward "+r.t.ward));
+  $("rows").innerHTML=f.map(({t,i,it},k)=>`<tr>
+    <td>${esc(t.id)}</td><td>${new Date(t.createdAt).toLocaleDateString()}</td><td>${esc(t.ward)}</td>
+    <td>${esc(t.name)}<br><small>${esc(t.phone)}</small><br><small>${esc(t.address)}</small></td>
+    <td>${esc(it.category)}${it.category=="Others"?"<br><small>"+esc(t.other)+"</small>":""}</td>
+    <td><span class="pill ${it.status}">${ST[it.status]}</span><br><select id="s${k}" class="noprint">${Object.entries(ST).map(([v,l])=>`<option value="${v}" ${v==it.status?"selected":""}>${l}</option>`).join("")}</select></td>
+    <td><input id="n${k}" type="text" value="${esc(it.note)}" placeholder="note (sent in SMS)"><span class="print-note" style="display:none">${esc(it.note)}</span></td>
+    <td class="noprint"><button class="btn" data-k="${k}">Update</button> <a class="btn sec" style="display:inline-block;text-decoration:none" target="_blank" rel="noopener" href="${waLink(t,it)}">WhatsApp</a></td></tr>`).join("");
+  $("count").textContent=f.length+" of "+rows.length+" issues";
+  $("rows").querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    const {t,i}=f[b.dataset.k];b.disabled=true;
+    try{await api("status",{method:"POST",body:JSON.stringify({id:t.id,index:i,status:$("s"+b.dataset.k).value,note:$("n"+b.dataset.k).value})});await load()}
+    catch(e){alert(e.message);b.disabled=false}
+  });
+}
+["q","fWard","fStatus","fCat"].forEach(i=>$(i).addEventListener("input",render));
+$("refresh").onclick=load;
+$("csv").onclick=()=>{
+  const h=["Ticket","Date","Ward","Coordinator","Name","Phone","Address","Issue","Other","Status","Note"];
+  const c=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const body=filtered().map(({t,it})=>[t.id,t.createdAt.slice(0,10),t.ward,t.coordinator,t.name,t.phone,t.address,it.category,t.other,ST[it.status],it.note].map(c).join(","));
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+[h.join(","),...body].join("\n")],{type:"text/csv"}));
+  a.download="ward-issues-"+new Date().toISOString().slice(0,10)+".csv";a.click();
+};
+if(token)load();
+</script>
+</body>
+</html>
