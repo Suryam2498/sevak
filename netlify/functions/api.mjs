@@ -52,7 +52,8 @@ async function sendSms(phone, message) {
 const clean = (s, n = 300) => String(s ?? "").trim().slice(0, n);
 
 export default async (req) => {
-  const store = globalThis.__DEV_STORE || getStore({ name: "tickets", consistency: "strong" });
+  const open = (n) => (globalThis.__DEV_STORE ? globalThis.__DEV_STORE(n) : getStore({ name: n, consistency: "strong" }));
+  const store = open("tickets");
   const route = new URL(req.url).pathname.replace(/^\/api\//, "");
 
   if (route === "login" && req.method === "POST") {
@@ -73,17 +74,19 @@ export default async (req) => {
     if (!issues.length) return json({ error: "Select at least one issue" }, 400);
     if (issues.includes("Others") && !other) return json({ error: "Describe the 'Others' issue" }, 400);
 
+    const photo = typeof b.photo === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(b.photo) && b.photo.length < 1_500_000 ? b.photo : "";
     const ward = clean(b.ward, 3).replace(/\D/g, "") || "29";
     const id = "PTP-W" + ward + "-" + Date.now().toString(36).toUpperCase().slice(-5) + crypto.randomBytes(1).toString("hex").toUpperCase();
     const now = new Date().toISOString();
     const rec = {
       id, city: "Pithapuram", ward, coordinator: clean(b.coordinator, 100), name, phone,
-      address: clean(b.address, 300), other, createdAt: now,
+      address: clean(b.address, 300), other, createdAt: now, hasPhoto: !!photo,
       issues: issues.map((category) => ({ category, status: "open", note: "", updatedAt: now })),
       sms: [],
     };
     const sms = await sendSms(phone, `Pithapuram Municipality: Your complaint ${id} (${issues.join(", ")}) is registered. Status: OPEN.`);
     rec.sms.push({ at: now, ok: sms.ok, info: sms.info, kind: "created" });
+    if (photo) await open("photos").setJSON(id, { data: photo });
     await store.setJSON(id, rec);
     return json({ id, sms: sms.ok });
   }
@@ -95,6 +98,11 @@ export default async (req) => {
     const all = (await Promise.all(blobs.map((x) => store.get(x.key, { type: "json" })))).filter(Boolean);
     all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return json({ tickets: all, categories: CATEGORIES });
+  }
+
+  if (route === "photo" && req.method === "GET") {
+    const p = await open("photos").get(new URL(req.url).searchParams.get("id") || "", { type: "json" });
+    return p ? json(p) : json({ error: "No photo" }, 404);
   }
 
   if (route === "status" && req.method === "POST") {

@@ -3,11 +3,13 @@ import http from "node:http" ;
 import fs from "node:fs";
 import path from "node:path";
 process.env.ADMIN_PASSWORD ??= "datta29";
-const dir = ".devdata"; fs.mkdirSync(dir, { recursive: true });
-globalThis.__DEV_STORE = {
-  async setJSON(k, v) { fs.writeFileSync(path.join(dir, k + ".json"), JSON.stringify(v)); },
-  async get(k) { try { return JSON.parse(fs.readFileSync(path.join(dir, k + ".json"), "utf8")); } catch { return null; } },
-  async list() { return { blobs: fs.readdirSync(dir).map((f) => ({ key: f.replace(/\.json$/, "") })) }; },
+globalThis.__DEV_STORE = (name) => {
+  const dir = path.join(".devdata", name); fs.mkdirSync(dir, { recursive: true });
+  return {
+    async setJSON(k, v) { fs.writeFileSync(path.join(dir, k + ".json"), JSON.stringify(v)); },
+    async get(k) { try { return JSON.parse(fs.readFileSync(path.join(dir, k + ".json"), "utf8")); } catch { return null; } },
+    async list() { return { blobs: fs.readdirSync(dir).map((f) => ({ key: f.replace(/\.json$/, "") })) }; },
+  };
 };
 const { default: api } = await import("./netlify/functions/api.mjs");
 const types = { ".html": "text/html", ".css": "text/css", ".png": "image/png", ".js": "text/javascript" };
