@@ -74,19 +74,21 @@ export default async (req) => {
     if (!issues.length) return json({ error: "Select at least one issue" }, 400);
     if (issues.includes("Others") && !other) return json({ error: "Describe the 'Others' issue" }, 400);
 
-    const photo = typeof b.photo === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(b.photo) && b.photo.length < 1_500_000 ? b.photo : "";
+    const photos = (Array.isArray(b.photos) ? b.photos : [])
+      .filter((x) => typeof x === "string" && x.length < 1_500_000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(x))
+      .slice(0, 5);
     const ward = clean(b.ward, 3).replace(/\D/g, "") || "29";
     const id = "PTP-W" + ward + "-" + Date.now().toString(36).toUpperCase().slice(-5) + crypto.randomBytes(1).toString("hex").toUpperCase();
     const now = new Date().toISOString();
     const rec = {
       id, city: "Pithapuram", ward, coordinator: clean(b.coordinator, 100), name, phone,
-      address: clean(b.address, 300), other, createdAt: now, hasPhoto: !!photo,
+      address: clean(b.address, 300), other, createdAt: now, photoCount: photos.length,
       issues: issues.map((category) => ({ category, status: "open", note: "", updatedAt: now })),
       sms: [],
     };
     const sms = await sendSms(phone, `Pithapuram Municipality: Your complaint ${id} (${issues.join(", ")}) is registered. Status: OPEN.`);
     rec.sms.push({ at: now, ok: sms.ok, info: sms.info, kind: "created" });
-    if (photo) await open("photos").setJSON(id, { data: photo });
+    if (photos.length) await open("photos").setJSON(id, { photos });
     await store.setJSON(id, rec);
     return json({ id, sms: sms.ok });
   }
@@ -102,7 +104,7 @@ export default async (req) => {
 
   if (route === "photo" && req.method === "GET") {
     const p = await open("photos").get(new URL(req.url).searchParams.get("id") || "", { type: "json" });
-    return p ? json(p) : json({ error: "No photo" }, 404);
+    return p ? json({ photos: p.photos || (p.data ? [p.data] : []) }) : json({ error: "No photo" }, 404);
   }
 
   if (route === "status" && req.method === "POST") {
