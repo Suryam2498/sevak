@@ -44,7 +44,7 @@
   </div>
 </div>
 <div id="coordBox" class="card noprint" style="display:none">
-  <h3 style="margin-top:0">Co-ordinators</h3>
+  <h3 style="margin-top:0">Sevaks</h3>
   <div class="filters">
     <input type="text" id="cName" placeholder="Name">
     <input type="tel" id="cMobile" inputmode="numeric" maxlength="10" placeholder="Mobile (login id)">
@@ -130,7 +130,7 @@ const toAvatar=f=>new Promise((res,rej)=>{const img=new Image(),u=URL.createObje
 const DEF="data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect width="44" height="44" fill="#fde2e2"/><circle cx="22" cy="17" r="8" fill="#e11d1d"/><path d="M6 44c0-11 7-16 16-16s16 5 16 16z" fill="#e11d1d"/></svg>');
 async function loadCoords(){
   try{const d=await api("coords");
-    $("cList").innerHTML=d.coords.length?`<table><thead><tr><th></th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>`+d.coords.map(c=>`<tr><td><img src="${c.photo||DEF}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--pri);background:var(--soft)"></td><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sec" data-del="${esc(c.mobile)}">Remove</button></td></tr>`).join("")+`</tbody></table>`:"<p style='color:var(--mut)'>No co-ordinators yet. Add one above.</p>";
+    $("cList").innerHTML=d.coords.length?`<table><thead><tr><th></th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>`+d.coords.map(c=>`<tr><td><img src="${c.photo||DEF}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--pri);background:var(--soft)"></td><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sec" data-del="${esc(c.mobile)}">Remove</button></td></tr>`).join("")+`</tbody></table>`:"<p style='color:var(--mut)'>No sevaks yet. Add one above.</p>";
     $("cList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove "+b.dataset.del+"?"))return;try{await api("coords/delete",{method:"POST",body:JSON.stringify({mobile:b.dataset.del})});loadCoords()}catch(e){alert(e.message)}});
   }catch(e){}
 }
@@ -144,7 +144,7 @@ $("wipe").onclick=async()=>{
   try{const d=await api("reset",{method:"POST",body:JSON.stringify({confirm:"DELETE"})});alert(d.deleted+" entries deleted");await load()}catch(e){alert(e.message)}
 };
 $("csv").onclick=()=>{
-  const h=["Ticket","Date","Ward","Coordinator","Name","Phone","Address","Issue","Other","Status","Note"];
+  const h=["Ticket","Date","Ward","Sevak","Name","Phone","Address","Issue","Other","Status","Note"];
   const c=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
   const body=filtered().map(({t,it})=>[t.id,t.createdAt.slice(0,10),t.ward,t.coordinator,t.name,t.phone,t.address,it.category,t.other,ST[it.status],it.note].map(c).join(","));
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+[h.join(","),...body].join("\n")],{type:"text/csv"}));
