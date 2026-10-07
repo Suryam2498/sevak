@@ -12,7 +12,7 @@ globalThis.__DEV_STORE = (name) => {
   };
 };
 const { default: api } = await import("./netlify/functions/api.mjs");
-const types = { ".html": "text/html", ".css": "text/css", ".png": "image/png", ".js": "text/javascript" };
+const types = { ".html": "text/html", ".css": "text/css", ".png": "image/png", ".ico": "image/x-icon", ".js": "text/javascript" };
 http.createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);
   const url = new URL(req.url, "http://localhost:8888");
