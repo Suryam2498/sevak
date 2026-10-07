@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e11d1d">
+<title>Login</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="favicon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<style>
+.hero{text-align:center;padding:28px 16px 4px}
+.hero img{height:130px;max-width:85%;object-fit:contain}
+.hero h1{margin:10px 0 2px;font-size:20px;color:var(--pri2)}
+.hero p{margin:0;color:var(--mut);font-size:14px}
+.box{max-width:400px;margin:18px auto;padding:0 16px}
+.foot{text-align:center;font-size:14px;margin-top:14px}
+.foot a{color:var(--pri);font-weight:600}
+</style>
+</head>
+<body>
+<div class="hero">
+  <img src="janasena-Logo.png" alt="Jana Sena">
+  <h1>Pithapuram Ward Survey</h1>
+  <p>Co-ordinator login</p>
+</div>
+<div class="box">
+  <form id="f" class="card" autocomplete="on">
+    <label for="mobile">Mobile number</label>
+    <input type="tel" id="mobile" name="username" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username" required>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" name="password" autocomplete="current-password" required>
+    <button class="btn big" id="go" type="submit">Submit</button>
+    <div id="msg"></div>
+  </form>
+  <div class="foot"><a href="admin.html">Admin login →</a></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+try{if(localStorage.getItem("ctk"))location.replace("index.html")}catch{}
+$("f").addEventListener("submit",async e=>{
+  e.preventDefault();$("go").disabled=true;$("msg").innerHTML="";
+  try{
+    const r=await fetch("/api/clogin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mobile:$("mobile").value,password:$("pw").value})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||"Login failed");
+    try{localStorage.setItem("ctk",d.token);localStorage.setItem("cname",d.name)}catch{}
+    location.href="index.html";
+  }catch(err){$("msg").innerHTML=`<div class="msg err">${err.message}</div>`}
+  $("go").disabled=false;
+});
+</script>
+</body>
+</html>

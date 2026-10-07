@@ -43,6 +43,16 @@
     <p id="count" style="color:var(--mut)"></p>
   </div>
 </div>
+<div id="coordBox" class="card noprint" style="display:none">
+  <h3 style="margin-top:0">Co-ordinators</h3>
+  <div class="filters">
+    <input type="text" id="cName" placeholder="Name">
+    <input type="tel" id="cMobile" inputmode="numeric" maxlength="10" placeholder="Mobile (login id)">
+    <input type="text" id="cPw" placeholder="Password (min 6)">
+    <button class="btn" id="cAdd" style="flex:0 0 auto">Add / Reset password</button>
+  </div>
+  <div id="cList"></div>
+</div>
 <div id="wipeBox" class="noprint" style="text-align:center;margin:30px 0;display:none"><button class="btn sec" id="wipe" style="color:#b91c1c;border-color:#b91c1c">Clear all data</button></div>
 </main>
 <script>
@@ -56,7 +66,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 async function api(path,opt={}){
   const r=await fetch("/api/"+path,{...opt,headers:{"content-type":"application/json",authorization:"Bearer "+token}});
   const d=await r.json().catch(()=>({}));
-  if(r.status===401&&path!=="login"){token="";$("login").style.display="block";$("app").style.display="none";$("wipeBox").style.display="none"}
+  if(r.status===401&&path!=="login"){token="";$("login").style.display="block";$("app").style.display="none";$("wipeBox").style.display="none";$("coordBox").style.display="none"}
   if(!r.ok)throw new Error(d.error||"Error");return d;
 }
 $("loginBtn").onclick=async()=>{
@@ -70,7 +80,7 @@ async function load(){
   try{
     const d=await api("tickets");cats=d.categories;
     rows=d.tickets.flatMap(t=>t.issues.map((it,i)=>({t,i,it})));
-    $("login").style.display="none";$("app").style.display="block";$("wipeBox").style.display="block";
+    $("login").style.display="none";$("app").style.display="block";$("wipeBox").style.display="block";$("coordBox").style.display="block";loadCoords();
     const wards=[...new Set(d.tickets.map(t=>+t.ward))].sort((a,b)=>a-b);
     $("fWard").innerHTML='<option value="">All wards</option>'+wards.map(w=>`<option>${w}</option>`).join("");
     $("fCat").innerHTML='<option value="">All issues</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join("");
@@ -97,7 +107,7 @@ function render(){
   bars("byCat",agg(r=>r.it.category));bars("byWard",agg(r=>"Ward "+r.t.ward));
   $("rows").innerHTML=f.map(({t,i,it},k)=>`<tr>
     <td>${esc(t.id)}</td><td>${new Date(t.createdAt).toLocaleDateString()}</td><td>${esc(t.ward)}</td>
-    <td>${esc(t.name)}<br><small>${esc(t.phone)}</small><br><small>${esc(t.address)}</small>${t.photoCount||t.hasPhoto?`<br><a href="#" class="noprint" data-photo="${esc(t.id)}">📷 View photos (${t.photoCount||1})</a>`:""}</td>
+    <td>${esc(t.name)}<br><small>${esc(t.phone)}</small><br><small>${esc(t.address)}</small>${t.coordinator?`<br><small style="color:var(--mut)">by ${esc(t.coordinator)}</small>`:""}${t.photoCount||t.hasPhoto?`<br><a href="#" class="noprint" data-photo="${esc(t.id)}">📷 View photos (${t.photoCount||1})</a>`:""}</td>
     <td>${esc(it.category)}${it.category=="Others"?"<br><small>"+esc(t.other)+"</small>":""}</td>
     <td><span class="pill ${it.status}">${ST[it.status]}</span><br><select id="s${k}" class="noprint">${Object.entries(ST).map(([v,l])=>`<option value="${v}" ${v==it.status?"selected":""}>${l}</option>`).join("")}</select></td>
     <td><input id="n${k}" type="text" value="${esc(it.note)}" placeholder="note (sent in SMS)"><span class="print-note" style="display:none">${esc(it.note)}</span></td>
@@ -115,6 +125,16 @@ function render(){
   });
 }
 ["q","fWard","fStatus","fCat"].forEach(i=>$(i).addEventListener("input",render));
+async function loadCoords(){
+  try{const d=await api("coords");
+    $("cList").innerHTML=d.coords.length?`<table><thead><tr><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>`+d.coords.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sec" data-del="${esc(c.mobile)}">Remove</button></td></tr>`).join("")+`</tbody></table>`:"<p style='color:var(--mut)'>No co-ordinators yet. Add one above.</p>";
+    $("cList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove "+b.dataset.del+"?"))return;try{await api("coords/delete",{method:"POST",body:JSON.stringify({mobile:b.dataset.del})});loadCoords()}catch(e){alert(e.message)}});
+  }catch(e){}
+}
+$("cAdd").onclick=async()=>{
+  try{await api("coords",{method:"POST",body:JSON.stringify({name:$("cName").value,mobile:$("cMobile").value,password:$("cPw").value})});
+    ["cName","cMobile","cPw"].forEach(i=>$(i).value="");loadCoords()}catch(e){alert(e.message)}
+};
 $("refresh").onclick=load;
 $("wipe").onclick=async()=>{
   if(prompt("This permanently deletes ALL tickets and photos. Type DELETE to confirm:")!=="DELETE")return;

@@ -8,24 +8,34 @@ const CATEGORIES = [
   "Pension", "Old Age", "Handicapped", "Dialysis", "Widow", "Single Women", "Drainage", "Sanitation", "Street Lights", "Roads", "Tax", "Govt Subsidies & Schemes", "Others",
 ];
 
+const clean = (s, n = 300) => String(s ?? "").trim().slice(0, n);
+
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 
 const secret = () => process.env.TOKEN_SECRET || process.env.ADMIN_PASSWORD || "change-me";
 const sign = (payload) => crypto.createHmac("sha256", secret()).update(payload).digest("hex");
 
-function makeToken() {
-  const exp = String(Date.now() + 12 * 3600 * 1000);
-  return `${exp}.${sign(exp)}`;
+function makeToken(role, sub = "", hours = 12) {
+  const body = `${role}~${sub}~${Date.now() + hours * 3600 * 1000}`;
+  return `${body}.${sign(body)}`;
 }
-function validToken(t) {
-  if (!t) return false;
-  const [exp, sig] = t.split(".");
-  if (!exp || !sig || Number(exp) < Date.now()) return false;
-  const good = sign(exp);
-  return sig.length === good.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good));
+function readToken(t) {
+  if (!t) return null;
+  const k = t.lastIndexOf(".");
+  const body = t.slice(0, k), sig = t.slice(k + 1);
+  const [role, sub, exp] = body.split("~");
+  if (!exp || Number(exp) < Date.now()) return null;
+  const good = sign(body);
+  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return null;
+  return { role, sub };
 }
-const isAdmin = (req) => validToken((req.headers.get("authorization") || "").replace("Bearer ", ""));
+const who = (req) => readToken((req.headers.get("authorization") || "").replace("Bearer ", ""));
+const isAdmin = (req) => who(req)?.role === "admin";
+
+const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString("hex");
+const validMobile = (m) => /^[6-9]\d{9}$/.test(m);
+const normMobile = (m) => clean(m, 15).replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
 
 function safeEqual(a = "", b = "") {
   const ha = crypto.createHash("sha256").update(a).digest();
@@ -49,7 +59,6 @@ async function sendSms(phone, message) {
   }
 }
 
-const clean = (s, n = 300) => String(s ?? "").trim().slice(0, n);
 
 export default async (req) => {
   const open = (n) => (globalThis.__DEV_STORE ? globalThis.__DEV_STORE(n) : getStore({ name: n, consistency: "strong" }));
@@ -60,10 +69,28 @@ export default async (req) => {
     const { password } = await req.json().catch(() => ({}));
     if (!process.env.ADMIN_PASSWORD) return json({ error: "ADMIN_PASSWORD not set on server" }, 500);
     if (!safeEqual(String(password || ""), process.env.ADMIN_PASSWORD)) return json({ error: "Wrong password" }, 401);
-    return json({ token: makeToken() });
+    return json({ token: makeToken("admin") });
   }
 
+  if (route === "clogin" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const mobile = normMobile(b.mobile);
+    const u = validMobile(mobile) ? await open("users").get(mobile, { type: "json" }) : null;
+    const ok = u && u.active !== false && crypto.timingSafeEqual(Buffer.from(hashPw(String(b.password || ""), u.salt)), Buffer.from(u.hash));
+    if (!ok) return json({ error: "Wrong mobile number or password" }, 401);
+    return json({ token: makeToken("coord", mobile, 24 * 30), name: u.name });
+  }
+
+
   if (route === "submit" && req.method === "POST") {
+    const me = who(req);
+    if (!me) return json({ error: "Please login again" }, 401);
+    let coordinator = "Admin";
+    if (me.role === "coord") {
+      const u = await open("users").get(me.sub, { type: "json" });
+      if (!u || u.active === false) return json({ error: "Account disabled. Contact admin" }, 401);
+      coordinator = u.name;
+    }
     const b = await req.json().catch(() => ({}));
     const phone = clean(b.phone, 15).replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
     const name = clean(b.name, 100);
@@ -81,7 +108,7 @@ export default async (req) => {
     const id = "PTP-W" + ward + "-" + Date.now().toString(36).toUpperCase().slice(-5) + crypto.randomBytes(1).toString("hex").toUpperCase();
     const now = new Date().toISOString();
     const rec = {
-      id, city: "Pithapuram", ward, coordinator: clean(b.coordinator, 100), name, phone,
+      id, city: "Pithapuram", ward, coordinator, coordinatorMobile: me.role === "coord" ? me.sub : "", name, phone,
       address: clean(b.address, 300), other, createdAt: now, photoCount: photos.length,
       issues: issues.map((category) => ({ category, status: "open", note: "", updatedAt: now })),
       sms: [],
@@ -105,6 +132,32 @@ export default async (req) => {
   if (route === "photo" && req.method === "GET") {
     const p = await open("photos").get(new URL(req.url).searchParams.get("id") || "", { type: "json" });
     return p ? json({ photos: p.photos || (p.data ? [p.data] : []) }) : json({ error: "No photo" }, 404);
+  }
+
+  if (route === "coords" && req.method === "GET") {
+    const us = open("users");
+    const { blobs } = await us.list();
+    const all = (await Promise.all(blobs.map((x) => us.get(x.key, { type: "json" })))).filter(Boolean);
+    return json({ coords: all.map(({ mobile, name, createdAt }) => ({ mobile, name, createdAt })).sort((a, b) => a.name.localeCompare(b.name)) });
+  }
+
+  if (route === "coords" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    const mobile = normMobile(b.mobile), name = clean(b.name, 80), password = String(b.password || "");
+    if (!validMobile(mobile)) return json({ error: "Enter a valid 10-digit mobile number" }, 400);
+    if (!name) return json({ error: "Name is required" }, 400);
+    if (password.length < 6) return json({ error: "Password must be at least 6 characters" }, 400);
+    const us = open("users");
+    const old = await us.get(mobile, { type: "json" });
+    const salt = crypto.randomBytes(16).toString("hex");
+    await us.setJSON(mobile, { mobile, name, salt, hash: hashPw(password, salt), active: true, createdAt: old?.createdAt || new Date().toISOString() });
+    return json({ ok: true, updated: !!old });
+  }
+
+  if (route === "coords/delete" && req.method === "POST") {
+    const b = await req.json().catch(() => ({}));
+    await open("users").delete(normMobile(b.mobile));
+    return json({ ok: true });
   }
 
   if (route === "reset" && req.method === "POST") {
