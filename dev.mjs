@@ -8,6 +8,7 @@ globalThis.__DEV_STORE = (name) => {
   return {
     async setJSON(k, v) { fs.writeFileSync(path.join(dir, k + ".json"), JSON.stringify(v)); },
     async get(k) { try { return JSON.parse(fs.readFileSync(path.join(dir, k + ".json"), "utf8")); } catch { return null; } },
+    async delete(k) { try { fs.unlinkSync(path.join(dir, k + ".json")); } catch {} },
     async list() { return { blobs: fs.readdirSync(dir).map((f) => ({ key: f.replace(/\.json$/, "") })) }; },
   };
 };

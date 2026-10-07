@@ -43,6 +43,7 @@
     <p id="count" style="color:var(--mut)"></p>
   </div>
 </div>
+<div class="noprint" style="text-align:center;margin:30px 0"><button class="btn sec" id="wipe" style="color:#b91c1c;border-color:#b91c1c">Clear all data</button></div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -115,6 +116,11 @@ function render(){
 }
 ["q","fWard","fStatus","fCat"].forEach(i=>$(i).addEventListener("input",render));
 $("refresh").onclick=load;
+$("wipe").onclick=async()=>{
+  if(prompt("This permanently deletes ALL tickets and photos.
+Type DELETE to confirm:")!=="DELETE")return;
+  try{const d=await api("reset",{method:"POST",body:JSON.stringify({confirm:"DELETE"})});alert(d.deleted+" entries deleted");await load()}catch(e){alert(e.message)}
+};
 $("csv").onclick=()=>{
   const h=["Ticket","Date","Ward","Coordinator","Name","Phone","Address","Issue","Other","Status","Note"];
   const c=v=>'"'+String(v??"").replace(/"/g,'""')+'"';

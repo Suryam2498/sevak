@@ -107,6 +107,19 @@ export default async (req) => {
     return p ? json({ photos: p.photos || (p.data ? [p.data] : []) }) : json({ error: "No photo" }, 404);
   }
 
+  if (route === "reset" && req.method === "POST") {
+    const { confirm } = await req.json().catch(() => ({}));
+    if (confirm !== "DELETE") return json({ error: "Type DELETE to confirm" }, 400);
+    let n = 0;
+    for (const name of ["tickets", "photos"]) {
+      const st = open(name);
+      const { blobs } = await st.list();
+      await Promise.all(blobs.map((x) => st.delete(x.key)));
+      if (name === "tickets") n = blobs.length;
+    }
+    return json({ deleted: n });
+  }
+
   if (route === "status" && req.method === "POST") {
     const { id, index, status, note } = await req.json().catch(() => ({}));
     if (!STATUSES.includes(status)) return json({ error: "Bad status" }, 400);
