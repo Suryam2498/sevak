@@ -14,7 +14,12 @@
 <header>
   <img src="janasena-Logo.png" alt="Jana Sena" class="logo" onerror="this.style.display='none'">
   <h1>Pithapuram Municipality – Ward Survey</h1>
-  <small>Door-to-door issue entry · <span id="who"></span> · <a href="#" id="logout">Logout</a></small>
+  <small>Door-to-door issue entry</small>
+  <div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:8px">
+    <label for="avatarIn" title="Change photo" style="margin:0;cursor:pointer;position:relative"><img id="avatar" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--pri);background:var(--soft)"><span style="position:absolute;right:-4px;bottom:-4px;background:var(--pri);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center">📷</span></label>
+    <input type="file" id="avatarIn" accept="image/*" style="display:none">
+    <span><b id="who"></b><br><a href="#" id="logout" style="font-size:13px">Logout</a></span>
+  </div>
 </header>
 <main>
 <form id="f" class="card" autocomplete="off">
@@ -51,7 +56,14 @@ const ls=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k)||"";localSt
 let tk="";try{tk=localStorage.getItem("ctk")||""}catch{}
 if(!tk)location.replace("login.html");
 $("coord").value=ls("cname");$("who").textContent=ls("cname");
-$("logout").onclick=e=>{e.preventDefault();try{localStorage.removeItem("ctk");localStorage.removeItem("cname")}catch{}location.href="login.html"};
+const toAvatar=f=>new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(f);img.onload=()=>{const n=256,k=Math.max(n/img.width,n/img.height),w=img.width*k,h=img.height*k,c=document.createElement("canvas");c.width=c.height=n;c.getContext("2d").drawImage(img,(n-w)/2,(n-h)/2,w,h);URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",.8))};img.onerror=()=>rej(new Error("Could not read that image"));img.src=u});
+const DEF="data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect width="44" height="44" fill="#fde2e2"/><circle cx="22" cy="17" r="8" fill="#e11d1d"/><path d="M6 44c0-11 7-16 16-16s16 5 16 16z" fill="#e11d1d"/></svg>');
+$("avatar").src=ls("cphoto")||DEF;
+fetch("/api/me",{headers:{authorization:"Bearer "+tk}}).then(r=>r.ok?r.json():null).then(d=>{if(!d)return;$("who").textContent=d.name;$("coord").value=d.name;ls("cname",d.name);ls("cphoto",d.photo);$("avatar").src=d.photo||DEF}).catch(()=>{});
+$("avatarIn").addEventListener("change",async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{const p=await toAvatar(f);const r=await fetch("/api/profile/photo",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+tk},body:JSON.stringify({photo:p})});
+    if(!r.ok)throw new Error((await r.json()).error);ls("cphoto",p);$("avatar").src=p}catch(err){alert(err.message)}});
+$("logout").onclick=e=>{e.preventDefault();try{["ctk","cname","cphoto"].forEach(k=>localStorage.removeItem(k))}catch{}location.href="login.html"};
 $("ward").value=ls("ward")||"29";
 $("checks").addEventListener("change",()=>{$("otherBox").style.display=[...document.querySelectorAll("#checks input")].some(c=>c.value=="Others"&&c.checked)?"block":"none"});
 let photos=[];

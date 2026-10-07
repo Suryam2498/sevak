@@ -34,6 +34,7 @@ const who = (req) => readToken((req.headers.get("authorization") || "").replace(
 const isAdmin = (req) => who(req)?.role === "admin";
 
 const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString("hex");
+const okAvatar = (x) => (typeof x === "string" && x.length < 200_000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(x) ? x : "");
 const validMobile = (m) => /^[6-9]\d{9}$/.test(m);
 const normMobile = (m) => clean(m, 15).replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
 
@@ -78,9 +79,28 @@ export default async (req) => {
     const u = validMobile(mobile) ? await open("users").get(mobile, { type: "json" }) : null;
     const ok = u && u.active !== false && crypto.timingSafeEqual(Buffer.from(hashPw(String(b.password || ""), u.salt)), Buffer.from(u.hash));
     if (!ok) return json({ error: "Wrong mobile number or password" }, 401);
-    return json({ token: makeToken("coord", mobile, 24 * 30), name: u.name });
+    return json({ token: makeToken("coord", mobile, 24 * 30), name: u.name, photo: u.photo || "" });
   }
 
+
+  if (route === "me" && req.method === "GET") {
+    const me = who(req);
+    const u = me?.role === "coord" ? await open("users").get(me.sub, { type: "json" }) : null;
+    if (!u || u.active === false) return json({ error: "Please login again" }, 401);
+    return json({ name: u.name, mobile: u.mobile, photo: u.photo || "" });
+  }
+
+  if (route === "profile/photo" && req.method === "POST") {
+    const me = who(req);
+    const us = open("users");
+    const u = me?.role === "coord" ? await us.get(me.sub, { type: "json" }) : null;
+    if (!u || u.active === false) return json({ error: "Please login again" }, 401);
+    const b = await req.json().catch(() => ({}));
+    const photo = b.photo === "" ? "" : okAvatar(b.photo);
+    if (b.photo !== "" && !photo) return json({ error: "Invalid photo" }, 400);
+    await us.setJSON(u.mobile, { ...u, photo });
+    return json({ ok: true, photo });
+  }
 
   if (route === "submit" && req.method === "POST") {
     const me = who(req);
@@ -138,7 +158,7 @@ export default async (req) => {
     const us = open("users");
     const { blobs } = await us.list();
     const all = (await Promise.all(blobs.map((x) => us.get(x.key, { type: "json" })))).filter(Boolean);
-    return json({ coords: all.map(({ mobile, name, createdAt }) => ({ mobile, name, createdAt })).sort((a, b) => a.name.localeCompare(b.name)) });
+    return json({ coords: all.map(({ mobile, name, createdAt, photo }) => ({ mobile, name, createdAt, photo: photo || "" })).sort((a, b) => a.name.localeCompare(b.name)) });
   }
 
   if (route === "coords" && req.method === "POST") {
@@ -150,7 +170,7 @@ export default async (req) => {
     const us = open("users");
     const old = await us.get(mobile, { type: "json" });
     const salt = crypto.randomBytes(16).toString("hex");
-    await us.setJSON(mobile, { mobile, name, salt, hash: hashPw(password, salt), active: true, createdAt: old?.createdAt || new Date().toISOString() });
+    await us.setJSON(mobile, { mobile, name, salt, hash: hashPw(password, salt), active: true, photo: okAvatar(b.photo) || old?.photo || "", createdAt: old?.createdAt || new Date().toISOString() });
     return json({ ok: true, updated: !!old });
   }
 

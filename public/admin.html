@@ -49,6 +49,7 @@
     <input type="text" id="cName" placeholder="Name">
     <input type="tel" id="cMobile" inputmode="numeric" maxlength="10" placeholder="Mobile (login id)">
     <input type="text" id="cPw" placeholder="Password (min 6)">
+    <input type="file" id="cPhoto" accept="image/*" title="Profile photo (optional)">
     <button class="btn" id="cAdd" style="flex:0 0 auto">Add / Reset password</button>
   </div>
   <div id="cList"></div>
@@ -125,15 +126,17 @@ function render(){
   });
 }
 ["q","fWard","fStatus","fCat"].forEach(i=>$(i).addEventListener("input",render));
+const toAvatar=f=>new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(f);img.onload=()=>{const n=256,k=Math.max(n/img.width,n/img.height),w=img.width*k,h=img.height*k,c=document.createElement("canvas");c.width=c.height=n;c.getContext("2d").drawImage(img,(n-w)/2,(n-h)/2,w,h);URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",.8))};img.onerror=()=>rej(new Error("Could not read that image"));img.src=u});
+const DEF="data:image/svg+xml;utf8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect width="44" height="44" fill="#fde2e2"/><circle cx="22" cy="17" r="8" fill="#e11d1d"/><path d="M6 44c0-11 7-16 16-16s16 5 16 16z" fill="#e11d1d"/></svg>');
 async function loadCoords(){
   try{const d=await api("coords");
-    $("cList").innerHTML=d.coords.length?`<table><thead><tr><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>`+d.coords.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sec" data-del="${esc(c.mobile)}">Remove</button></td></tr>`).join("")+`</tbody></table>`:"<p style='color:var(--mut)'>No co-ordinators yet. Add one above.</p>";
+    $("cList").innerHTML=d.coords.length?`<table><thead><tr><th></th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>`+d.coords.map(c=>`<tr><td><img src="${c.photo||DEF}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--pri);background:var(--soft)"></td><td>${esc(c.name)}</td><td>${esc(c.mobile)}</td><td><button class="btn sec" data-del="${esc(c.mobile)}">Remove</button></td></tr>`).join("")+`</tbody></table>`:"<p style='color:var(--mut)'>No co-ordinators yet. Add one above.</p>";
     $("cList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove "+b.dataset.del+"?"))return;try{await api("coords/delete",{method:"POST",body:JSON.stringify({mobile:b.dataset.del})});loadCoords()}catch(e){alert(e.message)}});
   }catch(e){}
 }
 $("cAdd").onclick=async()=>{
-  try{await api("coords",{method:"POST",body:JSON.stringify({name:$("cName").value,mobile:$("cMobile").value,password:$("cPw").value})});
-    ["cName","cMobile","cPw"].forEach(i=>$(i).value="");loadCoords()}catch(e){alert(e.message)}
+  try{const f=$("cPhoto").files[0];const photo=f?await toAvatar(f):"";await api("coords",{method:"POST",body:JSON.stringify({name:$("cName").value,mobile:$("cMobile").value,password:$("cPw").value,photo})});
+    ["cName","cMobile","cPw","cPhoto"].forEach(i=>$(i).value="");loadCoords()}catch(e){alert(e.message)}
 };
 $("refresh").onclick=load;
 $("wipe").onclick=async()=>{

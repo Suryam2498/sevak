@@ -44,7 +44,7 @@ $("f").addEventListener("submit",async e=>{
   try{
     const r=await fetch("/api/clogin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mobile:$("mobile").value,password:$("pw").value})});
     const d=await r.json();if(!r.ok)throw new Error(d.error||"Login failed");
-    try{localStorage.setItem("ctk",d.token);localStorage.setItem("cname",d.name)}catch{}
+    try{localStorage.setItem("ctk",d.token);localStorage.setItem("cname",d.name);localStorage.setItem("cphoto",d.photo||"")}catch{}
     location.href="index.html";
   }catch(err){$("msg").innerHTML=`<div class="msg err">${err.message}</div>`}
   $("go").disabled=false;
